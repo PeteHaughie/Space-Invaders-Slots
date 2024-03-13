@@ -1,7 +1,7 @@
 type Match = {
   symbol: string;
-  sequence: number[];
-  positions: number[];
+  sequence: number[]; // Stores the indices of drums in the sequence
+  positions: Array<{ drum: number; index: number }>; // Detailed positions of the symbol in each drum
 };
 
 /*
@@ -31,44 +31,83 @@ type Match = {
 
 */
 
+// Finds all indices of a symbol within a drum
+function indexOfAll(array: string[], searchItem: string): number[] {
+  let indices = [];
+  for (let i = 0; i < array.length; i++) {
+    if (array[i] === searchItem) {
+      indices.push(i);
+    }
+  }
+  return indices;
+}
+
+function exploreSequences(
+  drumIndex: number,
+  symbol: string,
+  currentSequence: number[],
+  currentPositions: Array<{ drum: number; index: number }>,
+  arr: string[][],
+  matches: Match[]
+) {
+  const nextDrumIndex = drumIndex + 1;
+
+  // Determine if the current sequence can be considered complete
+  const canRecordSequence = (currentSequence: number[], arr: string[][]): boolean => {
+    // Check if the sequence starts from the first drum or if the symbol is not present in the previous drum
+    const startingDrumIndex = currentSequence[0];
+    if (startingDrumIndex === 0 || !arr[startingDrumIndex - 1].includes(symbol)) {
+      return true; // Sequence can be recorded
+    }
+    return false; // Sequence should not be recorded
+  };
+
+  if (nextDrumIndex < arr.length) {
+    const nextDrumPositions = indexOfAll(arr[nextDrumIndex], symbol);
+    if (nextDrumPositions.length > 0) {
+      nextDrumPositions.forEach(position => {
+        exploreSequences(
+          nextDrumIndex,
+          symbol,
+          currentSequence.concat(nextDrumIndex),
+          currentPositions.concat({ drum: nextDrumIndex, index: position }),
+          arr,
+          matches
+        );
+      });
+    } else {
+      // If no continuation in the next drum and the sequence is long enough, check if it can be recorded
+      if (currentSequence.length >= 3 && canRecordSequence(currentSequence, arr)) {
+        matches.push({ symbol, sequence: currentSequence, positions: currentPositions });
+      }
+    }
+  } else {
+    // Reached the end of the drums; if the sequence is long enough, check if it can be recorded
+    if (currentSequence.length >= 3 && canRecordSequence(currentSequence, arr)) {
+      matches.push({ symbol, sequence: currentSequence, positions: currentPositions });
+    }
+  }
+}
+
 function WinningSets(arr: string[][]): Match[] {
-  const matches: Match[] = [];
+  let matches: Match[] = [];
 
   arr.forEach((drum, drumIndex) => {
-    if (drumIndex < arr.length - 2) { // Stop at the third drum because if it's not a match by now, it can't be part of a winning set
-      drum.forEach((symbol, symbolIndex) => {
-        let matchSequence: number[] = [drumIndex];
-        let matchPositions: number[] = [symbolIndex];
-        for (let nextDrumIndex = drumIndex + 1; nextDrumIndex < arr.length; nextDrumIndex++) {
-          const nextDrum = arr[nextDrumIndex];
-          const foundIndex = nextDrum.findIndex(s => s === symbol);
-
-          if (foundIndex !== -1) {
-            matchSequence.push(nextDrumIndex);
-            matchPositions.push(foundIndex);
-            if (matchSequence.length > 2) {
-              console.log(`
-                matchSequence: ${matchSequence}
-                symbol: ${symbol}
-              `);
-            }
-          } else {
-            break; // Stop if no contiguous match is found
-          }
-        }
-
-        // Only record matches that span more than two drums
-        if (matchSequence.length > 2) {
-          const matchFound = matches.find(m => m.symbol === symbol && JSON.stringify(m.sequence) === JSON.stringify(matchSequence));
-          if (!matchFound) {
-            matches.push({ symbol, sequence: matchSequence, positions: matchPositions});
-          }
-        }
-      });
-    }
+    drum.forEach((symbol, index) => {
+      // Start a new sequence from each symbol in each drum
+      const initialPosition = { drum: drumIndex, index };
+      exploreSequences(drumIndex, symbol, [drumIndex], [initialPosition], arr, matches);
+    });
   });
 
-  return matches;
+  // Deduplicate matches to ensure uniqueness
+  return matches.filter((match, index, self) =>
+    index === self.findIndex(m =>
+      m.symbol === match.symbol &&
+      JSON.stringify(m.sequence) === JSON.stringify(match.sequence) &&
+      JSON.stringify(m.positions) === JSON.stringify(match.positions)
+    )
+  );
 }
 
 export { WinningSets };

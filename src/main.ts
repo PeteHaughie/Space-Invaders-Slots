@@ -16,6 +16,7 @@ import {
 } from 'howler';
 
 import {
+  ApplicationState,
   AudioState,
   // ScoreState
 } from './modules/state';
@@ -27,7 +28,39 @@ import {
 } from './modules/utilities';
 */
 
-const series: string = "125331412425451"; // I have no idea how this will actually arrive so let's just say it's a string of digits
+import { WinningSets } from './modules/winningset';
+
+const testArr = [
+  ["s1", "s2", "s5"],
+  ["s3", "s3", "s1"],
+  ["s4", "s1", "s2"],
+  ["s4", "s2", "s5"],
+  ["s4", "s5", "s1"]
+]; // this should result in 2 returned sets
+
+// the following array should result in 6 returned sets
+// inspired by the duplicate s3 values in the previous array
+// if a pair of values can appear in the same drum then that implies duplicate branching sequences
+const testArr2 = [
+  ["s1", "s2", "s3"], // 0
+  ["s3", "s3", "s1"], // 1
+  ["s4", "s1", "s3"], // 2
+  ["s4", "s3", "s3"], // 3
+  ["s4", "s3", "s1"]  // 4
+];
+
+/*
+s1: [0][0], [1][2], [2][1]
+s3: [0][2], [1][0], [2][2], [3][2], [4][1]
+s3: [0][2], [1][0], [2][2], [3][1], [4][1]
+s3: [0][2], [1][1], [2][2], [3][2], [4][1]
+s3: [0][2], [1][1], [2][2], [3][1], [4][1]
+s4: [2][0], [3][0], [4][0]
+*/
+
+WinningSets(testArr).forEach((set) => {
+  console.log(set.symbol, set.positions);
+});
 
 (async () => {
   const app = new Application();
@@ -51,6 +84,7 @@ const series: string = "125331412425451"; // I have no idea how this will actual
 
   // state objects
   const audioState = new AudioState();
+  const applicationState = new ApplicationState();
 
   // audio objects
   const themeTrack = new Howl({
@@ -230,6 +264,10 @@ const series: string = "125331412425451"; // I have no idea how this will actual
     frameCount += time.deltaTime / 60;
     heroContainer.position.y += Math.sin(frameCount) * 0.5;
   });
+
+  if (applicationState.getGame()) {
+    console.log("game is on");
+  }
 
   app.stage.addChild(container);
 
