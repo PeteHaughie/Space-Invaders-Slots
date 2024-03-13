@@ -18,13 +18,11 @@ type Match = {
   Example return:
   [
     {
-      length: 3,
       positions: [ 0, 1, 2],
       sequence: [ 0, 2, 1 ],
       symbol: "s1"
     },
     {
-      length: 3,
       positions: [ 0, 0, 0],
       sequence: [ 2, 3, 4 ]
       symbol: "s4"
