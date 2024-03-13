@@ -3,8 +3,8 @@ class ApplicationState {
   private game: boolean;
 
   constructor() {
-    this.menu = true;
-    this.game = false;
+    this.menu = false;
+    this.game = true;
   }
 
   public getMenu(): boolean {
