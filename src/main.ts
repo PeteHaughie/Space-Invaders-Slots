@@ -347,7 +347,7 @@ WinningSets(testArr).forEach((set) => {
       // we're going to try and find our winners here
       if (!applicationState.getRevealWinners()) {
         applicationState.toggleRevealWinners();
-        WinningSets(testArr2).forEach((set) => {
+        WinningSets(testArr).forEach((set) => {
           for (let i = 0; i < set.positions.length; i++) {
             const anwinrar = (Array.from(drums) as any)[set.positions[i].drum].children[set.positions[i].index];
             applicationState.addWinner(anwinrar);
