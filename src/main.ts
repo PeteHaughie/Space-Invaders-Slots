@@ -1,18 +1,16 @@
 import './style.css'
 
 import {
+  AnimatedSprite,
   Application,
   Assets,
   Container,
-  // Graphics,
-  // GraphicsContext,
   Sprite,
-  // Text
+  TextureStyle
 } from 'pixi.js';
 
 import {
   Howl,
-  // Howler
 } from 'howler';
 
 import {
@@ -21,12 +19,12 @@ import {
   // ScoreState
 } from './modules/state';
 
-/*
 import {
-  degreesToRadians,
   mapValues
 } from './modules/utilities';
-*/
+
+import Explosion from './modules/explosion_gen';
+import Invader from './modules/invader_gen';
 
 import { WinningSets } from './modules/winningset';
 
@@ -36,11 +34,14 @@ const testArr = [
   ["s4", "s1", "s2"],
   ["s4", "s2", "s5"],
   ["s4", "s5", "s1"]
-]; // this should result in 2 returned sets
+]; // this should result in 2 returned winning sets
+/* 
+s1: [0][0], [1][2], [2][1]
+s4: [2][0], [3][0], [4][0]
+*/
 
-// the following array should result in 6 returned sets
-// inspired by the duplicate s3 values in the previous array
-// if a pair of values can appear in the same drum then that implies duplicate branching sequences
+// the following array should result in 6 returned winning sets
+// due to the dual s3 values in a single drum in the test array there was an implied possibility of duplicate sequences
 const testArr2 = [
   ["s1", "s2", "s3"], // 0
   ["s3", "s3", "s1"], // 1
@@ -58,12 +59,16 @@ s3: [0][2], [1][1], [2][2], [3][1], [4][1]
 s4: [2][0], [3][0], [4][0]
 */
 
+/*
 WinningSets(testArr).forEach((set) => {
   console.log(set.symbol, set.positions);
 });
+*/
 
 (async () => {
   const app = new Application();
+
+  TextureStyle.defaultOptions.scaleMode = 'nearest';
   
   await app.init({
     // application variables
@@ -82,6 +87,7 @@ WinningSets(testArr).forEach((set) => {
   // add canvas to the body
   document.body.appendChild(app.canvas);
 
+
   // state objects
   const audioState = new AudioState();
   const applicationState = new ApplicationState();
@@ -89,7 +95,7 @@ WinningSets(testArr).forEach((set) => {
   // audio objects
   const themeTrack = new Howl({
     html5: true,
-    loop: true,
+    loop: false, // does the loop actually screw with the audio logic?
     sprite: {
       intro: [0.30, 2192],
       intro2: [2192, 9275],
@@ -99,7 +105,7 @@ WinningSets(testArr).forEach((set) => {
     volume: 0.5
   });
 
-  const soundTrack = new Howl({
+  const soundEffects = new Howl({
     src: ['/sound/soundsSprite.wav'],
     html5: true,
     sprite: {
@@ -125,25 +131,19 @@ WinningSets(testArr).forEach((set) => {
     volume: 0.5
   });
 
-  /* debug audio states
-  themeTrack.on('play', () => {
-    if (audioState.getSprite() === 'intro') {
-      console.log("we're in the intro");
-    }
-    if (audioState.getSprite() === 'intro2') {
-      console.log("we're in intro2, moving to the loop");
-    }
-    if (audioState.getSprite() === 'loop') {
-      console.log("we're in the loop");
-    }
-  });
-  */
-
   themeTrack.on('end', () => {
     console.log("current audio sprite:", audioState.getSprite());
+    if (audioState.getSprite() == "intro") {
+      themeTrack.play('intro'); // fake the loop
+    }
     if (audioState.getSprite() == "intro2") {
       console.log("stop intro2 and move to the main theme");
+      applicationState.toggleMenu();
+      applicationState.toggleGame();
       switchToMainMusicSprite();
+    }
+    if (audioState.getSprite() == "loop") {
+      themeTrack.play('loop'); // fake the loop
     }
   });
 
@@ -164,6 +164,7 @@ WinningSets(testArr).forEach((set) => {
         heroContainer.y = 0;
 
   const heroTexture = await Assets.load('/images/hero.svg');
+        heroTexture.scaleMode = 'linear';
   const hero = new Sprite(heroTexture);
         hero.width = heroTexture.width / 3;
         hero.height = heroTexture.height / 3;
@@ -206,6 +207,7 @@ WinningSets(testArr).forEach((set) => {
     }
     themeTrack.play(nowplay);
   }
+
   function stopTrack() {
     themeTrack.fade(0.5, 0.0, 100);
     themeTrack.stop();
@@ -220,15 +222,15 @@ WinningSets(testArr).forEach((set) => {
   function switchToIntro2Sprite() {
     play.off('pointerdown', switchToIntro2Sprite); // remove the event from the button
     stopTrack();
-    audioState.setSprite('intro2');
     checkAudioState('intro2');
+    audioState.setSprite('intro2');
     // themeTrack.play('intro2');
   };
 
   function switchToMainMusicSprite() {
     stopTrack();
-    audioState.setSprite('loop');
     checkAudioState('loop');
+    audioState.setSprite('loop');
     // themeTrack.play('loop');
   };
 
@@ -244,31 +246,179 @@ WinningSets(testArr).forEach((set) => {
   heroContainer.addChild(hero);
   heroContainer.addChild(play);
   heroContainer.addChild(music);
-
   app.stage.addChild(heroContainer);
 
-  const sprites = await Assets.load('/images/sprites.png');
+  const playStageContainer = new Container(); // main stage container
+        playStageContainer.x = 0;
+        playStageContainer.y = 0;
 
-  const container = new Container();
+  const drumsContainer = new Container(); // all drums container
+        drumsContainer.x = (app.stage.width / 2) - (162 * 2.5);
+        drumsContainer.y = 100;
+  
+  const sprites = await Assets.load('/images/sprites.json').then(() => {
+    return Assets.cache.get('/images/sprites.json');
+  });
 
-  const invader = new Sprite(sprites);
+  const playerTexture = await Assets.load('/images/player.svg');
+  const player: Sprite = new Sprite(playerTexture);
+        player.anchor.set(0.5);
+        player.width = 160;
+        player.height = 160;
+        player.tint = 0xffffff;
+        player.x = 411;
+        player.y = app.screen.height - 200;
+  
+  playStageContainer.addChild(player);
 
-  container.x = (app.screen.width / 3) * 2;
-  container.y = (app.screen.height / 3) * 2;
+  const shotTexture = await Assets.load('/images/shot.svg');
+  const shot: Sprite = new Sprite(shotTexture);
+        shot.anchor.set(0.5);
+        shot.height = 160;
+        shot.width = 160;
+        shot.x = 0;
+        shot.y = app.screen.height - 200;
 
-  container.pivot.x = container.width / 2;
-  container.pivot.y = container.height / 2;
+  playStageContainer.addChild(shot);
+  
+  const drums: any = [];
+  
+  for (let i = 0; i < 5; i++) {
+    const drumContainer = new Container(); // individual drum container
+    drums.push(drumContainer);
+  }
 
-  let frameCount = 0.0;
+  drums.forEach((drum: Container, index: number) => {
+    drum.x = index * 160;
+    // in case you want to go from end backwards
+    /*
+    testArr[index].reverse().forEach((symbol, index) => {
+      const invader = returnSymbol(symbol, index);
+      if (invader) {
+        drum.addChild(invader);
+      }
+    });
+    */
+    testArr[index].forEach((symbol, index) => {
+      const invader = new Invader(sprites).generateInvader(symbol, index);
+      if (invader) {
+        drum.addChild(invader);
+      }
+    });
+    drumsContainer.addChild(drum);
+  });
+
+  playStageContainer.addChild(drumsContainer);
+
+  app.stage.addChild(playStageContainer);
+
+  let frameCount: number = 0.0;
+  
+  const fadeAmount: number = 0.03;
+
   app.ticker.add((time) => {
     frameCount += time.deltaTime / 60;
     heroContainer.position.y += Math.sin(frameCount) * 0.5;
+    if (applicationState.getMenu()) {
+      heroContainer.alpha = heroContainer.alpha > 0 ? heroContainer.alpha - fadeAmount : 0;
+      // play container
+      playStageContainer.alpha = playStageContainer.alpha < 1 ? playStageContainer.alpha + fadeAmount : 1;
+    }
+    if (applicationState.getGame()) {
+      // main game loop
+      heroContainer.alpha = heroContainer.alpha < 1 ? heroContainer.alpha + fadeAmount : 1;
+      // play container
+      playStageContainer.alpha = playStageContainer.alpha > 0 ? playStageContainer.alpha - fadeAmount : 0;
+    }
+    if (audioState.getAudio()) {
+      themeTrack.volume(themeTrack.volume() > 0 ? themeTrack.volume() - 0.1 : 0.0);
+    } else {
+      themeTrack.volume(themeTrack.volume() < 0.5 ? themeTrack.volume() + 0.1 : 0.5);
+    }
+
+    if (applicationState.getAnimateShot()) {
+      shot.visible = true;
+      shot.x = applicationState.getShotSpawn();
+      if (shot.y > -(app.screen.height - 200)) {
+        shot.y = shot.y - 8;
+      } else {
+        applicationState.setShotSpawn(playStageContainer.x);
+        shot.y = app.screen.height - 200;
+      }
+    } else {
+      shot.visible = false;
+      shot.y = app.screen.height - 200;
+    }
+    // playerContainer.position.x += mapValues(Math.sin(frameCount), -1, 1, -5.3, 5.3); // do this between spins
   });
 
-  if (applicationState.getGame()) {
-    console.log("game is on");
-  }
-
-  app.stage.addChild(container);
+  // keyboard controls 
+  document.addEventListener('keydown', (event) => {
+    if (event.code === 'KeyM') {
+      applicationState.toggleMenu();
+      applicationState.toggleGame();
+    }
+    if (event.code === 'KeyN') {
+      audioState.toggleAudio();
+    }
+    if (event.code === 'KeyB') {
+      console.log("shot spawn:", playStageContainer.x)
+      applicationState.setShotSpawn(playStageContainer.x);
+      applicationState.toggleAnimateShot();
+    }
+    if (event.code === 'ArrowLeft') {
+      if (player.x > 450) {
+        player.x = player.x - 160;
+      } else {
+        player.x = 411;
+      }
+    }
+    if (event.code === 'ArrowRight') {
+      if (player.x < (250 + (160 * 5))) {
+        player.x = player.x + 160;
+      } else {
+        player.x = app.stage.width - 411;
+      }
+    }
+    if (event.code === 'Space') {
+      // we're going to try and find our winners here
+      if (!applicationState.getRevealWinners()) {
+        applicationState.toggleRevealWinners();
+        WinningSets(testArr).forEach((set) => {
+  
+          for (let i = 0; i < set.positions.length; i++) {
+            const anwinrar = (Array.from(drums) as any)[set.positions[i].drum].children[set.positions[i].index];
+            applicationState.addWinner(anwinrar);
+            const explosion = new Explosion(sprites).generateExplosion();
+                  explosion.x = set.positions[i].drum * 160;
+                  explosion.y = set.positions[i].index * 116;
+            applicationState.addExplosion(explosion);
+          }
+        });
+        applicationState.getWinners().forEach((anwinrar) => {
+          anwinrar.visible = false;
+        });
+        applicationState.getExplosions().forEach((explosion) => {
+          drumsContainer.addChild(explosion);
+        });
+      } else {
+        applicationState.toggleRevealWinners();
+        applicationState.getWinners().forEach((anwinrar) => {
+          anwinrar.visible = true;
+          applicationState.clearWinners();
+        });
+        applicationState.getExplosions().forEach((explosion) => {
+          explosion.destroy();
+          applicationState.clearExplosions();
+        });
+      }
+    }
+    // explosions.forEach((explosion) => {
+    //   drumsContainer.addChild(explosion);
+    // });
+    // explosions.forEach((explosion) => {
+    //   explosion.destroy();
+    // });
+  });
 
 })();
