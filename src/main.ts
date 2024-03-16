@@ -8,7 +8,7 @@ import {
   TextureStyle
 } from 'pixi.js';
 
-import anime from 'animejs';
+import anime, { set } from 'animejs';
 
 import {
   Howl,
@@ -120,6 +120,20 @@ WinningSets(testArr).forEach((set) => {
     volume: 0.5
   });
 
+  const buttonSound = new Howl({
+    html5: true,
+    loop: false,
+    src: ['/sound/button.wav'],
+    volume: 0.5
+  });
+
+  const getReadySound = new Howl({
+    html5: true,
+    loop: false,
+    src: ['/sound/start_1.wav'],
+    volume: 0.5
+  });
+
   themeTrack.on('end', () => {
     console.log("current audio sprite:", audioState.getSprite());
     if (audioState.getSprite() == "intro") {
@@ -168,22 +182,30 @@ WinningSets(testArr).forEach((set) => {
         play.anchor.set(0.5);
         play.x = (app.screen.width / 2) - 75;
         play.y = app.screen.height / 2;
-        play.eventMode = 'static';
+        play.interactive = true; // Add this line
         play.cursor = 'pointer';
         play.on('pointerdown', switchToIntro2Sprite);
+        play.on('pointerdown', () => buttonSound.play());
+        play.on('pointerdown', () => {
+          setTimeout(() => {
+            getReadySound.play();
+          }, 10000);
+        });
 
   const musicTexture = await Assets.load('/images/music.svg');
   const music = new Sprite(musicTexture);
         music.width = musicTexture.width / 3;
         music.height = musicTexture.height / 3;
+        music.interactive = true;
         music.anchor.set(0.5);
         music.x = (app.screen.width / 2) + 75;
         music.y = app.screen.height / 2;
-        music.eventMode = 'static';
         music.cursor = 'pointer';
         music.on('pointerdown', toggleMusic);
+        music.on('pointerdown', () => buttonSound.play());
 
-  audioState.setSprite('intro');
+  audioState.setSprite('intro'); // set the default audio sprite
+
   if (audioState.getAudio()) {
     themeTrack.play('intro'); // sprite is set by default in the state constructor
   }
@@ -320,7 +342,7 @@ WinningSets(testArr).forEach((set) => {
     // playerContainer.position.x += mapValues(Math.sin(frameCount), -1, 1, -5.3, 5.3); // do this between spins
   });
 
-  // keyboard controls 
+  // keyboard controls for test events
   document.addEventListener('keydown', (event) => {
     if (event.code === 'KeyM') {
       applicationState.toggleMenu();
@@ -329,89 +351,76 @@ WinningSets(testArr).forEach((set) => {
     if (event.code === 'KeyN') {
       audioState.toggleAudio();
     }
-    if (event.code === 'ArrowLeft') {
-      if (player.x > 450) {
-        player.x = player.x - 160;
-      } else {
-        player.x = 411;
-      }
-    }
-    if (event.code === 'ArrowRight') {
-      if (player.x < (250 + (160 * 5))) {
-        player.x = player.x + 160;
-      } else {
-        player.x = app.stage.width - 411;
-      }
-    }
     if (event.code === 'Space') {
-      // we're going to try and find our winners here
-      if (!applicationState.getRevealWinners()) {
-        applicationState.toggleRevealWinners();
-        WinningSets(testArr).forEach((set) => {
-          for (let i = 0; i < set.positions.length; i++) {
-            const anwinrar = (Array.from(drums) as any)[set.positions[i].drum].children[set.positions[i].index];
-            applicationState.addWinner(anwinrar);
-            const explosion = new Explosion(sprites).generateExplosion();
-                  explosion.x = set.positions[i].drum * 160;
-                  explosion.y = set.positions[i].index * 116;
-                  explosion.tint = set.color;
-            applicationState.addExplosion(explosion);
-          }
-        });
-        for (let i = 0; i < applicationState.getWinners().length; i++) {
-          setTimeout(() => {
-            // move the player to the winning position over 1 second
-            const shot = new Shot(shotTexture).generateShot();
-                  shot.visible = false;
-                  shot.x = player.x;
-                  shot.y = player.y;
+      // TODO:
+      // 1. CLear explosions between each reveal
+      // 2. Reset invaders to original visible state
+      revealWinners(); // with no value it wuill use the testArr
+    }
+  });
+
+  function revealWinners(arr: string[][] = testArr) {
+    WinningSets(arr).forEach((set) => {
+      for (let i = 0; i < set.positions.length; i++) {
+        const anwinrar = (Array.from(drums) as any)[set.positions[i].drum].children[set.positions[i].index];
+        applicationState.addWinner(anwinrar);
+        const explosion = new Explosion(sprites).generateExplosion();
+              explosion.x = set.positions[i].drum * 160;
+              explosion.y = set.positions[i].index * 116;
+              explosion.tint = set.color;
+        applicationState.addExplosion(explosion);
+      }
+    });
+    for (let i = 0; i < applicationState.getWinners().length; i++) {
+      setTimeout(() => {
+        // move the player to the winning position over 1 second
+        const shot = new Shot(shotTexture).generateShot();
+              shot.visible = false;
+              shot.x = player.x;
+              shot.y = player.y;
+        anime({
+          targets: player,
+          x: 411 + applicationState.getExplosions()[i].x,
+          duration: 1000,
+          easing: 'easeOutElastic',
+          complete: () => {
+            shot.x = player.x;
             anime({
-              targets: player,
-              x: 411 + applicationState.getExplosions()[i].x,
-              duration: 1000,
-              easing: 'easeOutElastic',
+              targets: shot,
+              y: applicationState.getWinners()[i].y + drumsContainer.y + 80,
+              duration: 500,
+              easing: 'linear',
+              begin: () => {
+                playStageContainer.addChild(shot);
+                shotSound.play();
+                shot.visible = true;
+              },
               complete: () => {
-                shot.x = player.x;
-                anime({
-                  targets: shot,
-                  y: applicationState.getWinners()[i].y + drumsContainer.y + 80,
-                  duration: 500,
-                  easing: 'linear',
-                  begin: () => {
-                    playStageContainer.addChild(shot);
-                    shotSound.play();
-                    shot.visible = true;
-                  },
-                  complete: () => {
-                    shot.destroy();
-                    applicationState.getWinners()[i].visible = false;
-                    explosionSound.play();
-                    drumsContainer.addChild(applicationState.getExplosions()[i]);
-                  }
-                });
+                shot.destroy();
+                applicationState.getWinners()[i].visible = false;
+                explosionSound.play();
+                drumsContainer.addChild(applicationState.getExplosions()[i]);
               }
             });
-          }, (i + 1) * 1000); // Pause for 1 second before applying the effect to each pair of objects
-        }
-      } else {
-        applicationState.toggleRevealWinners();
-        applicationState.getWinners().forEach((anwinrar) => {
-          anwinrar.visible = true;
-          applicationState.clearWinners();
+          }
         });
-        applicationState.getExplosions().forEach((explosion) => {
-          explosion.destroy();
-          applicationState.clearExplosions();
-        });
-        player.x = 411;
-      }
+      }, (i + 1) * 1000); // Pause for 1 second before applying the effect to each pair of objects
     }
-    // explosions.forEach((explosion) => {
-    //   drumsContainer.addChild(explosion);
-    // });
-    // explosions.forEach((explosion) => {
-    //   explosion.destroy();
-    // });
-  });
+    setTimeout(() => {
+      resetSymbols();
+    }, ((applicationState.getWinners().length + 2) * 1000) + 1000);
+  }
+
+  function resetSymbols() {
+    applicationState.toggleRevealWinners();
+    applicationState.getWinners().forEach((anwinrar) => {
+      anwinrar.visible = true;
+      applicationState.clearWinners();
+    });
+    applicationState.getExplosions().forEach((explosion) => {
+      explosion.destroy();
+      applicationState.clearExplosions();
+    });
+  }
 
 })();
