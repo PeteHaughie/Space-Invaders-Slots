@@ -19,7 +19,7 @@ class Invader {
               invader_s1.scale.set(10);
               invader_s1.animationSpeed = 1 / 30;
               invader_s1.play();
-              invader_s1.x = 0;
+              invader_s1.x = 23;
               invader_s1.y = spriteOffsetY;
         return invader_s1;
       case "s2":
@@ -43,7 +43,7 @@ class Invader {
               invader_s4.scale.set(10);
               invader_s4.animationSpeed = 1 / 30;
               invader_s4.play();
-              invader_s4.x = 0;
+              invader_s4.x = 23;
               invader_s4.y = spriteOffsetY;
         return invader_s4;
       case "s5":

@@ -1,8 +1,19 @@
 type Match = {
   symbol: string;
+  color: string;
   sequence: number[]; // Stores the indices of drums in the sequence
   positions: Array<{ drum: number; index: number }>; // Detailed positions of the symbol in each drum
 };
+
+// a list of nice colours to use that I don't think we'll use anywhere else
+const colours = [
+  "0x3C7080",
+  "0x4D468E",
+  "0x7A687F",
+  "0xD2AA61",
+  "0xFAEB2D",
+  "0xEE1800"
+];
 
 /*
 
@@ -78,13 +89,13 @@ function exploreSequences(
     } else {
       // If no continuation in the next drum and the sequence is long enough, check if it can be recorded
       if (currentSequence.length >= 3 && canRecordSequence(currentSequence, arr)) {
-        matches.push({ symbol, sequence: currentSequence, positions: currentPositions });
+        matches.push({ symbol, sequence: currentSequence, positions: currentPositions, color: colours[Math.floor(Math.random() * colours.length)] });
       }
     }
   } else {
     // Reached the end of the drums; if the sequence is long enough, check if it can be recorded
     if (currentSequence.length >= 3 && canRecordSequence(currentSequence, arr)) {
-      matches.push({ symbol, sequence: currentSequence, positions: currentPositions });
+      matches.push({ symbol, sequence: currentSequence, positions: currentPositions, color: colours[Math.floor(Math.random() * colours.length)] });
     }
   }
 }

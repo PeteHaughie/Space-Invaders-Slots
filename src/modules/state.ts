@@ -1,4 +1,4 @@
-import { AnimatedSprite } from "../types";
+import { AnimatedSprite } from "pixi.js";
 
 class ApplicationState {
   private menu: boolean;

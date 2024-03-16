@@ -1,13 +1,14 @@
 import './style.css'
 
 import {
-  AnimatedSprite,
   Application,
   Assets,
   Container,
   Sprite,
   TextureStyle
 } from 'pixi.js';
+
+import anime from 'animejs';
 
 import {
   Howl,
@@ -25,6 +26,7 @@ import {
 
 import Explosion from './modules/explosion_gen';
 import Invader from './modules/invader_gen';
+import Shot from './modules/shot_gen';
 
 import { WinningSets } from './modules/winningset';
 
@@ -87,7 +89,6 @@ WinningSets(testArr).forEach((set) => {
   // add canvas to the body
   document.body.appendChild(app.canvas);
 
-
   // state objects
   const audioState = new AudioState();
   const applicationState = new ApplicationState();
@@ -105,29 +106,17 @@ WinningSets(testArr).forEach((set) => {
     volume: 0.5
   });
 
-  const soundEffects = new Howl({
-    src: ['/sound/soundsSprite.wav'],
+  const shotSound = new Howl({
     html5: true,
-    sprite: {
-      chain: [0.000, 0.725],
-      lose: [0.925, 2.488],
-      ufo_highpitch: [2.688, 2.851],
-      ufo_lowpitch: [3.051, 5.392],
-      start_1: [5.592, 7.340],
-      start_2: [8.726, 9.861],
-      start_3: [7.540, 8.526],
-      get: [10.061, 10.557],
-      jackpot: [10.757, 12.112],
-      invaderkilled: [12.312, 12.618],
-      button: [12.818, 12.918],
-      shoot: [13.118, 13.488],
-      explosion: [13.688, 14.480],
-      fastinvader3: [14.969, 15.065],
-      fastinvader1: [14.680, 14.769],
-      fastinvader2: [15.265, 15.359],
-      fastinvader4: [15.559, 15.659],
-    },
     loop: false,
+    src: ['/sound/shoot.wav'],
+    volume: 0.5
+  });
+
+  const explosionSound = new Howl({
+    html5: true,
+    loop: false,
+    src: ['/sound/explosion.wav'],
     volume: 0.5
   });
 
@@ -256,8 +245,8 @@ WinningSets(testArr).forEach((set) => {
         drumsContainer.x = (app.stage.width / 2) - (162 * 2.5);
         drumsContainer.y = 100;
   
-  const sprites = await Assets.load('/images/sprites.json').then(() => {
-    return Assets.cache.get('/images/sprites.json');
+  const sprites = await Assets.load('/images/spritesheet.json').then(() => {
+    return Assets.cache.get('/images/spritesheet.json');
   });
 
   const playerTexture = await Assets.load('/images/player.svg');
@@ -272,14 +261,6 @@ WinningSets(testArr).forEach((set) => {
   playStageContainer.addChild(player);
 
   const shotTexture = await Assets.load('/images/shot.svg');
-  const shot: Sprite = new Sprite(shotTexture);
-        shot.anchor.set(0.5);
-        shot.height = 160;
-        shot.width = 160;
-        shot.x = 0;
-        shot.y = app.screen.height - 200;
-
-  playStageContainer.addChild(shot);
   
   const drums: any = [];
   
@@ -336,19 +317,6 @@ WinningSets(testArr).forEach((set) => {
       themeTrack.volume(themeTrack.volume() < 0.5 ? themeTrack.volume() + 0.1 : 0.5);
     }
 
-    if (applicationState.getAnimateShot()) {
-      shot.visible = true;
-      shot.x = applicationState.getShotSpawn();
-      if (shot.y > -(app.screen.height - 200)) {
-        shot.y = shot.y - 8;
-      } else {
-        applicationState.setShotSpawn(playStageContainer.x);
-        shot.y = app.screen.height - 200;
-      }
-    } else {
-      shot.visible = false;
-      shot.y = app.screen.height - 200;
-    }
     // playerContainer.position.x += mapValues(Math.sin(frameCount), -1, 1, -5.3, 5.3); // do this between spins
   });
 
@@ -360,11 +328,6 @@ WinningSets(testArr).forEach((set) => {
     }
     if (event.code === 'KeyN') {
       audioState.toggleAudio();
-    }
-    if (event.code === 'KeyB') {
-      console.log("shot spawn:", playStageContainer.x)
-      applicationState.setShotSpawn(playStageContainer.x);
-      applicationState.toggleAnimateShot();
     }
     if (event.code === 'ArrowLeft') {
       if (player.x > 450) {
@@ -384,23 +347,52 @@ WinningSets(testArr).forEach((set) => {
       // we're going to try and find our winners here
       if (!applicationState.getRevealWinners()) {
         applicationState.toggleRevealWinners();
-        WinningSets(testArr).forEach((set) => {
-  
+        WinningSets(testArr2).forEach((set) => {
           for (let i = 0; i < set.positions.length; i++) {
             const anwinrar = (Array.from(drums) as any)[set.positions[i].drum].children[set.positions[i].index];
             applicationState.addWinner(anwinrar);
             const explosion = new Explosion(sprites).generateExplosion();
                   explosion.x = set.positions[i].drum * 160;
                   explosion.y = set.positions[i].index * 116;
+                  explosion.tint = set.color;
             applicationState.addExplosion(explosion);
           }
         });
-        applicationState.getWinners().forEach((anwinrar) => {
-          anwinrar.visible = false;
-        });
-        applicationState.getExplosions().forEach((explosion) => {
-          drumsContainer.addChild(explosion);
-        });
+        for (let i = 0; i < applicationState.getWinners().length; i++) {
+          setTimeout(() => {
+            // move the player to the winning position over 1 second
+            const shot = new Shot(shotTexture).generateShot();
+                  shot.visible = false;
+                  shot.x = player.x;
+                  shot.y = player.y;
+            anime({
+              targets: player,
+              x: 411 + applicationState.getExplosions()[i].x,
+              duration: 1000,
+              easing: 'easeOutElastic',
+              complete: () => {
+                shot.x = player.x;
+                anime({
+                  targets: shot,
+                  y: applicationState.getWinners()[i].y + drumsContainer.y + 80,
+                  duration: 500,
+                  easing: 'linear',
+                  begin: () => {
+                    playStageContainer.addChild(shot);
+                    shotSound.play();
+                    shot.visible = true;
+                  },
+                  complete: () => {
+                    shot.destroy();
+                    applicationState.getWinners()[i].visible = false;
+                    explosionSound.play();
+                    drumsContainer.addChild(applicationState.getExplosions()[i]);
+                  }
+                });
+              }
+            });
+          }, (i + 1) * 1000); // Pause for 1 second before applying the effect to each pair of objects
+        }
       } else {
         applicationState.toggleRevealWinners();
         applicationState.getWinners().forEach((anwinrar) => {
@@ -411,6 +403,7 @@ WinningSets(testArr).forEach((set) => {
           explosion.destroy();
           applicationState.clearExplosions();
         });
+        player.x = 411;
       }
     }
     // explosions.forEach((explosion) => {
