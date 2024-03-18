@@ -7,12 +7,20 @@ type Match = {
 
 // a list of nice colours to use that I don't think we'll use anywhere else
 const colours = [
-  "0x3C7080",
-  "0x4D468E",
-  "0x7A687F",
-  "0xD2AA61",
-  "0xFAEB2D",
-  "0xEE1800"
+  "0xFF0000", // red
+  "0x0FF000", // green
+  "0x00FF00", // blue
+  "0x000FF0", // purple
+  "0x0000FF", // dark blue
+  "0xFFFF00", // yellow
+  "0xFF00FF", // pink
+  "0x00FFFF", // cyan
+  "0x5fff87", // apple green
+  "0x870087", // hot pink
+  "0xd70087", // another hot pink
+  "0x5fd7ff", // sky blue
+  "0x5f00d7", // purple
+  "0xff5fd7"  // pink
 ];
 
 /*
