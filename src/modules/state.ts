@@ -1,38 +1,70 @@
 import { AnimatedSprite } from "pixi.js";
 
 class ApplicationState {
-  private menu: boolean;
-  private game: boolean;
+  private menu:          boolean;
+  private game:          boolean;
+  private spinning:      boolean;
+  private playerWander:  boolean;
   private revealWinners: boolean;
-  private explosions: AnimatedSprite[];
-  private winners: AnimatedSprite[];
-  private animateShot: boolean;
-  private shotSpawn: number;
+  private explosions:    AnimatedSprite[];
+  private winners:       AnimatedSprite[];
 
   constructor() {
     this.menu = true;
     this.game = false;
+    this.spinning = false;
+    this.playerWander = false;
     this.revealWinners = false;
     this.explosions = [];
     this.winners = [];
-    this.animateShot = false;
-    this.shotSpawn = 0;
   }
 
   public getMenu(): boolean {
     return this.menu;
   }
 
-  public getGame(): boolean {
-    return this.game;
-  }
-
   public toggleMenu(): void {
     this.menu = !this.menu;
   }
 
+  public setMenu(menu: boolean): void {
+    this.menu = menu;
+  }
+
+  public getGame(): boolean {
+    return this.game;
+  }
+
   public toggleGame(): void {
     this.game = !this.game;
+  }
+
+  public setGame(game: boolean): void {
+    this.game = game;
+  }
+
+  public getSpinning(): boolean {
+    return this.spinning;
+  }
+
+  public toggleSpinning(): void {
+    this.spinning = !this.spinning;
+  }
+
+  public setSpinning(spinning: boolean): void {
+    this.spinning = spinning;
+  }
+
+  public getPlayerWander(): boolean {
+    return this.playerWander;
+  }
+
+  public togglePlayerWander(): void {
+    this.playerWander = !this.playerWander;
+  }
+
+  public setPlayerWander(playerWander: boolean): void {
+    this.playerWander = playerWander;
   }
 
   public getRevealWinners(): boolean {
@@ -76,22 +108,6 @@ class ApplicationState {
   public clearWinners(): void {
     this.winners = [];
   }
-
-  public getAnimateShot(): boolean {
-    return this.animateShot;
-  }
-
-  public toggleAnimateShot(): void {
-    this.animateShot = !this.animateShot;
-  }
-
-  public getShotSpawn(): number {
-    return this.shotSpawn;
-  }
-
-  public setShotSpawn(value: number): void {
-    this.shotSpawn = value;
-  }
 }
 
 class AudioState {
@@ -99,7 +115,7 @@ class AudioState {
   private sprite: string;
 
   constructor() {
-    this.audio = false;
+    this.audio = true;
     this.sprite = "intro";
   }
 

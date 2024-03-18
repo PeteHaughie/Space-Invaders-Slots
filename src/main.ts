@@ -3,12 +3,14 @@ import './style.css'
 import {
   Application,
   Assets,
+  BlurFilter,
   Container,
+  Graphics,
   Sprite,
   TextureStyle
 } from 'pixi.js';
 
-import anime, { set } from 'animejs';
+import anime from 'animejs';
 
 import {
   Howl,
@@ -17,16 +19,13 @@ import {
 import {
   ApplicationState,
   AudioState,
-  // ScoreState
+  ScoreState,
 } from './modules/state';
-
-import {
-  mapValues
-} from './modules/utilities';
 
 import Explosion from './modules/explosion_gen';
 import Invader from './modules/invader_gen';
 import Shot from './modules/shot_gen';
+import Hundo from './modules/100_gen';
 
 import { WinningSets } from './modules/winningset';
 
@@ -37,20 +36,31 @@ const testArr = [
   ["s4", "s2", "s5"],
   ["s4", "s5", "s1"]
 ]; // this should result in 2 returned winning sets
+
 /* 
 s1: [0][0], [1][2], [2][1]
 s4: [2][0], [3][0], [4][0]
 */
 
+/*
+WinningSets(testArr).forEach((set) => {
+  console.log(set.symbol, set.positions);
+});
+*/
+
+
 // the following array should result in 6 returned winning sets
 // due to the dual s3 values in a single drum in the test array there was an implied possibility of duplicate sequences
-const testArr2 = [
+
+/*
+const testArr = [
   ["s1", "s2", "s3"], // 0
   ["s3", "s3", "s1"], // 1
   ["s4", "s1", "s3"], // 2
   ["s4", "s3", "s3"], // 3
   ["s4", "s3", "s1"]  // 4
 ];
+*/
 
 /*
 s1: [0][0], [1][2], [2][1]
@@ -69,6 +79,9 @@ WinningSets(testArr).forEach((set) => {
 
 (async () => {
   const app = new Application();
+
+  // I presume you'll want to poke about in the app guts - don't do this in production
+  (globalThis as any).__PIXI_APP__ = app;
 
   TextureStyle.defaultOptions.scaleMode = 'nearest';
   
@@ -92,15 +105,16 @@ WinningSets(testArr).forEach((set) => {
   // state objects
   const audioState = new AudioState();
   const applicationState = new ApplicationState();
+  const scoreState = new ScoreState();
 
   // audio objects
   const themeTrack = new Howl({
     html5: true,
-    loop: false, // does the loop actually screw with the audio logic?
+    loop: false, // don't use the default loop - we'll fake it and use states to play what we want when we want
     sprite: {
       intro: [0.30, 2192],
       intro2: [2192, 9275],
-      loop: [9275, 104070]
+      loop: [11500, 104070]
     },
     src: ['/sound/these-80s-182328.mp3'],
     volume: 0.5
@@ -127,6 +141,13 @@ WinningSets(testArr).forEach((set) => {
     volume: 0.5
   });
 
+  const buttonDisabledSound = new Howl({
+    html5: true,
+    loop: false,
+    src: ['/sound/button-disabled.wav'],
+    volume: 0.5
+  });
+
   const getReadySound = new Howl({
     html5: true,
     loop: false,
@@ -134,23 +155,28 @@ WinningSets(testArr).forEach((set) => {
     volume: 0.5
   });
 
-  themeTrack.on('end', () => {
-    console.log("current audio sprite:", audioState.getSprite());
-    if (audioState.getSprite() == "intro") {
-      themeTrack.play('intro'); // fake the loop
-    }
-    if (audioState.getSprite() == "intro2") {
-      console.log("stop intro2 and move to the main theme");
-      applicationState.toggleMenu();
-      applicationState.toggleGame();
-      switchToMainMusicSprite();
-    }
-    if (audioState.getSprite() == "loop") {
-      themeTrack.play('loop'); // fake the loop
-    }
+  const letsDoItSound = new Howl({
+    html5: true,
+    loop: false,
+    src: ['/sound/start_2.wav'],
+    volume: 0.5
   });
 
-  // game objects
+  const thuds = ["/sound/fastinvader1.wav", "/sound/fastinvader2.wav", "/sound/fastinvader3.wav", "/sound/fastinvader4.wav"];
+  const howls: Record<string, Howl> = {};
+
+  thuds.forEach((thud) => {
+    howls[thud] = new Howl({
+      html5: true,
+      loop: false,
+      src: thud,
+      volume: 0.5
+    });
+  });
+
+  const symbolLibrary: string[] = ["s1", "s2", "s3", "s4", "s5"];
+
+  // main game objects
   const bgTexture = await Assets.load('/images/background.png');
   const bg = new Sprite(bgTexture);
         bg.width = app.screen.width;
@@ -159,7 +185,9 @@ WinningSets(testArr).forEach((set) => {
         bg.y = 0;
 
   app.stage.addChild(bg); // Add the background after the container
+  // end main game objects
 
+  // intro objects
   const heroContainer = new Container();
         heroContainer.width = app.screen.width;
         heroContainer.height = app.screen.height;
@@ -174,35 +202,118 @@ WinningSets(testArr).forEach((set) => {
         hero.anchor.set(0.5);
         hero.x = app.screen.width / 2;
         hero.y = app.screen.height / 4;
+  // end intro objects
   
+  // buttons
+  // play button
   const playTexture = await Assets.load('/images/play.svg');
   const play = new Sprite(playTexture);
-        play.width = playTexture.width / 3;
-        play.height = playTexture.height / 3;
+        play.width = playTexture.width / 2;
+        play.height = playTexture.height / 2;
         play.anchor.set(0.5);
-        play.x = (app.screen.width / 2) - 75;
+        play.x = (app.screen.width / 2) - 85;
         play.y = app.screen.height / 2;
         play.interactive = true; // Add this line
         play.cursor = 'pointer';
-        play.on('pointerdown', switchToIntro2Sprite);
-        play.on('pointerdown', () => buttonSound.play());
         play.on('pointerdown', () => {
-          setTimeout(() => {
-            getReadySound.play();
-          }, 10000);
+          if (!applicationState.getGame()) {
+            anime({
+              targets: heroContainer,
+              duration: 1000,
+              easing: 'linear',
+              alpha: 0,
+              complete: () => {
+                setTimeout(() => {
+                  anime({
+                    targets: playStageContainer,
+                    duration: 500,
+                    easing: 'linear',
+                    alpha: 1
+                  });
+                }, 1500);
+              }
+            })
+            switchToIntro2Sprite();
+            buttonSound.play();
+            setTimeout(() => {
+              getReadySound.play();
+            }, 1200); // the timing of this will change based on the intro2 sprite
+          } else {
+            buttonDisabledSound.play();
+          }
         });
 
+  // toggle music button
   const musicTexture = await Assets.load('/images/music.svg');
   const music = new Sprite(musicTexture);
-        music.width = musicTexture.width / 3;
-        music.height = musicTexture.height / 3;
+        music.width = musicTexture.width / 2;
+        music.height = musicTexture.height / 2;
         music.interactive = true;
         music.anchor.set(0.5);
-        music.x = (app.screen.width / 2) + 75;
+        music.x = (app.screen.width / 2) + 85;
         music.y = app.screen.height / 2;
         music.cursor = 'pointer';
-        music.on('pointerdown', toggleMusic);
+        music.on('pointerdown', () => toggleMusic());
         music.on('pointerdown', () => buttonSound.play());
+
+  const playMusic = new Sprite(musicTexture);
+        playMusic.width = musicTexture.width / 2;
+        playMusic.height = musicTexture.height / 2;
+        playMusic.interactive = true;
+        playMusic.anchor.set(0.5);
+        playMusic.x = -(app.screen.width / 2) + (playMusic.width / 2) + 80;
+        playMusic.y = app.screen.height / 2 + 50;
+        playMusic.cursor = 'pointer';
+        playMusic.on('pointerdown', () => {
+          buttonSound.play();
+          toggleMusic();
+        });
+
+  // spin button
+  const spinTexture = await Assets.load('/images/spin.svg');
+  const spin = new Sprite(spinTexture);
+        spin.width = spinTexture.width / 2;
+        spin.height = spinTexture.height / 2;
+        spin.anchor.set(0.5);
+        spin.x = app.screen.width / 4 + 100;
+        spin.y = app.screen.height / 2 + 50;
+        spin.interactive = true;
+        spin.cursor = 'pointer';
+        spin.on('pointerdown', () => {
+          if (!applicationState.getSpinning()) {
+            applicationState.setSpinning(true);
+            spinDrums();
+            buttonSound.play();
+            setTimeout(() => {
+              letsDoItSound.play();
+            }, 500);
+          } else {
+            buttonDisabledSound.play();
+          }
+        });
+  // end buttons
+
+  // audio playback
+  themeTrack.on('play', () => {
+    // console.log("current audio sprite:", audioState.getSprite());
+    if (audioState.getSprite() == "intro2") {
+      setTimeout(() => {
+        applicationState.toggleMenu();
+        applicationState.toggleGame();
+      }, 1000);
+    }
+  });
+  themeTrack.on('end', () => {
+    if (audioState.getSprite() == "intro") {
+      themeTrack.play('intro'); // fake the loop
+    }
+    if (audioState.getSprite() == "intro2") {
+      switchToMainMusicSprite();
+    }
+    if (audioState.getSprite() == "loop") {
+      themeTrack.play('loop'); // fake the loop
+    }
+  });
 
   audioState.setSprite('intro'); // set the default audio sprite
 
@@ -210,49 +321,33 @@ WinningSets(testArr).forEach((set) => {
     themeTrack.play('intro'); // sprite is set by default in the state constructor
   }
 
-  function checkAudioState(nowplay: string) {
-    if (audioState.getAudio()) {
-      themeTrack.volume(0.5);
-    } else {
-      themeTrack.volume(0.0);
-    }
-    themeTrack.play(nowplay);
-  }
-
   function stopTrack() {
-    themeTrack.fade(0.5, 0.0, 100);
     themeTrack.stop();
-    if (audioState.getAudio()) {
-      console.log("audio is on");
-      themeTrack.volume(0.5);
-    } else {
-      console.log("audio is off");
-    }
   }
 
   function switchToIntro2Sprite() {
     play.off('pointerdown', switchToIntro2Sprite); // remove the event from the button
     stopTrack();
-    checkAudioState('intro2');
+    themeTrack.play('intro2');
     audioState.setSprite('intro2');
-    // themeTrack.play('intro2');
   };
 
   function switchToMainMusicSprite() {
     stopTrack();
-    checkAudioState('loop');
+    themeTrack.play('loop');
     audioState.setSprite('loop');
-    // themeTrack.play('loop');
   };
 
   function toggleMusic() {
     audioState.toggleAudio();
+    const currentVolume = themeTrack.volume();
     if (audioState.getAudio()) {
-      themeTrack.fade(0.0, 0.5, 100);
+      themeTrack.fade(currentVolume, 0.5, 500);
     } else {
-      themeTrack.fade(0.5, 0.0, 100);
+      themeTrack.fade(currentVolume, 0.0, 500);
     }
   };
+  // end audio
   
   heroContainer.addChild(hero);
   heroContainer.addChild(play);
@@ -260,27 +355,122 @@ WinningSets(testArr).forEach((set) => {
   app.stage.addChild(heroContainer);
 
   const playStageContainer = new Container(); // main stage container
-        playStageContainer.x = 0;
+        playStageContainer.x = app.stage.width / 2;
         playStageContainer.y = 0;
 
+  playStageContainer.addChild(playMusic);
+
   const drumsContainer = new Container(); // all drums container
-        drumsContainer.x = (app.stage.width / 2) - (162 * 2.5);
+        drumsContainer.x = -((160 * 5) / 2);
         drumsContainer.y = 100;
+        
+  const mask = new Graphics();
+        mask.rect(app.stage.width / 2 - ((160 * 5) / 2), 50, 160 * 5, 120 * 3);
+        mask.fill(0xffffff);
+        
+  drumsContainer.mask = mask;
   
+  // spritesheets
+  // animated spritesheet
   const sprites = await Assets.load('/images/spritesheet.json').then(() => {
     return Assets.cache.get('/images/spritesheet.json');
   });
 
+  // text spritesheet
+  const textSprites = await Assets.load('/images/text.json').then(() => {
+    return Assets.cache.get('/images/text.json');
+  });
+
+  // end spritesheets
+
+  // alphanumeric objects
+  const scoreContainer = new Container();
+        scoreContainer.x = -app.stage.width / 2 + 80;
+        scoreContainer.y = 80;
+
+  const scoreTextContainer = new Container();
+        scoreTextContainer.x = 0;
+        scoreTextContainer.y = 0;
+
+  const textString = "SCORE";
+  const SCORE: Sprite[] = [];
+  for (let i = 0; i < textString.length; i++) {
+    const letter = new Sprite(textSprites.textures[textString.charAt(i) + '.svg']);
+          letter.scale = 5;
+          letter.anchor.set(0.5);
+          letter.tint = "0xffffff";
+          letter.x = 0;
+          letter.y = 0;
+    SCORE.push(letter);
+  }
+  const colon = new Sprite(textSprites.textures['colon.svg']);
+        colon.scale = 5;
+        colon.anchor.set(0.5);
+        colon.tint = "0xffffff";
+        colon.x = 0;
+        colon.y = 0;
+  SCORE.push(colon);
+
+  SCORE.forEach((letter, index) => {
+    letter.x = 40 * index;
+    letter.y = 0;
+    scoreTextContainer.addChild(letter);
+  });
+
+  const scoreValueContainer = new Container();
+        scoreValueContainer.x = 0;
+        scoreValueContainer.y = 42;
+
+  const numString = "0123456789";
+  const NUMBERS: Sprite[] = [];
+  for (let i = 0; i < numString.length; i++) {
+    const number = new Sprite(textSprites.textures[numString.charAt(i) + '.svg']);
+          number.scale = 5;
+          number.anchor.set(0.5);
+          number.tint = "0xffffff";
+          number.x = 0;
+          number.y = 0;
+    NUMBERS.push(number);
+  }
+
+  NUMBERS.forEach((number, index) => {
+    number.x = 40 * index;
+    number.y = 46;
+  });
+
+  function updateScore() {
+    scoreValueContainer.removeChildren();
+    scoreState.getScore().toString().split('').forEach((number, index) => {
+      const num = new Sprite(textSprites.textures[number + '.svg']);
+            num.scale = 5;
+            num.anchor.set(0.5);
+            num.tint = "0xffffff";
+            num.x = 40 * index;
+            num.y = 0;
+      scoreValueContainer.addChild(num);
+    });
+  };
+  updateScore();
+
+  scoreContainer.addChild(scoreTextContainer);
+  scoreContainer.addChild(scoreValueContainer);
+
+  // end alphanumeric objects
+  
+  playStageContainer.addChild(scoreContainer);
+
+  // game objects
   const playerTexture = await Assets.load('/images/player.svg');
   const player: Sprite = new Sprite(playerTexture);
         player.anchor.set(0.5);
         player.width = 160;
         player.height = 160;
-        player.tint = 0xffffff;
-        player.x = 411;
+        player.tint = "0xffffff";
+        player.x = 0;
         player.y = app.screen.height - 200;
   
   playStageContainer.addChild(player);
+  playStageContainer.addChild(spin);
 
   const shotTexture = await Assets.load('/images/shot.svg');
   
@@ -291,104 +481,150 @@ WinningSets(testArr).forEach((set) => {
     drums.push(drumContainer);
   }
 
+  const arr = testArr;
+
   drums.forEach((drum: Container, index: number) => {
-    drum.x = index * 160;
-    // in case you want to go from end backwards
-    /*
-    testArr[index].reverse().forEach((symbol, index) => {
-      const invader = returnSymbol(symbol, index);
-      if (invader) {
-        drum.addChild(invader);
-      }
-    });
-    */
-    testArr[index].forEach((symbol, index) => {
+    const numberOfDummyInvaders: number = 2997; // sprites are essentially free because they share the same texture
+    // add the actual winning set to the array
+    arr[index].forEach((symbol: string, index: number) => {
       const invader = new Invader(sprites).generateInvader(symbol, index);
-      if (invader) {
-        drum.addChild(invader);
-      }
+      drum.addChild(invader);
     });
+    const dummyInvaders: string[] = [];
+    for (let i = 0; i < numberOfDummyInvaders; i++) {
+      dummyInvaders.push(symbolLibrary[Math.floor(Math.random() * symbolLibrary.length)]); // push 150 symbols to the array
+    }
+    dummyInvaders.forEach((invader: string, index: number) => {
+      const dummyInvader = new Invader(sprites).generateInvader(invader, index, 3); // generate a dummy invader for each symbol
+      drum.addChild(dummyInvader); // add the dummy invader to the drum
+    });
+    drum.x = index * 160; // this should probably really be moved to the drumContainer object but it's here now so we'll live with it
+    drumsContainer.y = - 120 * (drum.children.length - 3) + 30; // this puts the last three symbols of each drum on screen 
     drumsContainer.addChild(drum);
   });
 
   playStageContainer.addChild(drumsContainer);
+  playStageContainer.alpha = 0;
 
   app.stage.addChild(playStageContainer);
+  // end game objects
 
+  // game loop
   let frameCount: number = 0.0;
   
-  const fadeAmount: number = 0.03;
-
+  // main game loop
   app.ticker.add((time) => {
     frameCount += time.deltaTime / 60;
-    heroContainer.position.y += Math.sin(frameCount) * 0.5;
-    if (applicationState.getMenu()) {
-      heroContainer.alpha = heroContainer.alpha > 0 ? heroContainer.alpha - fadeAmount : 0;
-      // play container
-      playStageContainer.alpha = playStageContainer.alpha < 1 ? playStageContainer.alpha + fadeAmount : 1;
-    }
-    if (applicationState.getGame()) {
-      // main game loop
-      heroContainer.alpha = heroContainer.alpha < 1 ? heroContainer.alpha + fadeAmount : 1;
-      // play container
-      playStageContainer.alpha = playStageContainer.alpha > 0 ? playStageContainer.alpha - fadeAmount : 0;
-    }
-    if (audioState.getAudio()) {
-      themeTrack.volume(themeTrack.volume() > 0 ? themeTrack.volume() - 0.1 : 0.0);
+    heroContainer.position.y += Math.sin(frameCount) * 0.5; // bounce the menu about a bit
+    if (applicationState.getSpinning()) {
+      spin.alpha = 0.5;
     } else {
-      themeTrack.volume(themeTrack.volume() < 0.5 ? themeTrack.volume() + 0.1 : 0.5);
-    }
-
-    // playerContainer.position.x += mapValues(Math.sin(frameCount), -1, 1, -5.3, 5.3); // do this between spins
-  });
-
-  // keyboard controls for test events
-  document.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyM') {
-      applicationState.toggleMenu();
-      applicationState.toggleGame();
-    }
-    if (event.code === 'KeyN') {
-      audioState.toggleAudio();
-    }
-    if (event.code === 'Space') {
-      // TODO:
-      // 1. CLear explosions between each reveal
-      // 2. Reset invaders to original visible state
-      revealWinners(); // with no value it wuill use the testArr
+      spin.alpha = 1;
     }
   });
 
-  function revealWinners(arr: string[][] = testArr) {
+  function playerWander() {
+    const amt = (Math.floor(Math.random() * drumsContainer.width)) - (drumsContainer.width / 2);
+    anime({
+      targets: player,
+      x: amt,
+      easing: 'easeOutExpo',
+      duration: Math.floor(Math.random() * 1000) + 500,
+      complete: () => {
+        if (applicationState.getPlayerWander()) {
+          playerWander();
+        }
+      }
+    });
+  }
+
+  function spinDrums() {
+    playerWander();
+    applicationState.setPlayerWander(true);
+    drums.forEach((drum: Container, index: number) => {
+      setTimeout(() => {
+        // notch the drum
+        anime({
+          targets: drum,
+          y: -120,
+          duration: 200,
+          easing: 'easeInElastic',
+          complete: () => {
+            // drop all symbols downwards for three seconds
+            anime({
+              targets: drum,
+              y: drumsContainer.children[0].height,
+              duration: 3000 + Math.floor(Math.random() * 300),
+              easing: 'linear',
+              begin: () => {
+                const blur = new BlurFilter();
+                      blur.quality = 4;
+                      blur.blurX = 0;
+                      blur.blurY = 24;
+                drum.filters = [blur];
+              },
+              // offset the end by the height of three symbols
+              complete() {
+                drum.filters = [];
+                anime({
+                  targets: drum,
+                  y: drumsContainer.children[0].height - (130 * 3),
+                  duration: 200,
+                  easing: 'easeOutElastic',
+                  complete: () => {
+                    howls[thuds[Math.floor(Math.random() * thuds.length)]].play();
+                  }
+                });
+              },
+            });
+          }
+        });
+      }, (index * 500)); // stagger the start time of each drum by half a second
+    });
+    setTimeout(() => {
+      revealWinners(arr);
+    }, 4100); // this should be the same as the duration of the last animation call
+  }
+
+  function revealWinners(arr: string[][] = []) {
+    applicationState.setPlayerWander(false);
     WinningSets(arr).forEach((set) => {
       for (let i = 0; i < set.positions.length; i++) {
         const anwinrar = (Array.from(drums) as any)[set.positions[i].drum].children[set.positions[i].index];
         applicationState.addWinner(anwinrar);
         const explosion = new Explosion(sprites).generateExplosion();
               explosion.x = set.positions[i].drum * 160;
-              explosion.y = set.positions[i].index * 116;
+              explosion.y = (drumsContainer.children[0].height - 400) - (-set.positions[i].index * 116); // the explosion is smaller than the invader sprite
               explosion.tint = set.color;
+              console.log(set.color);
         applicationState.addExplosion(explosion);
       }
     });
+    const playerOffset = (160 * 5) / 2;
     for (let i = 0; i < applicationState.getWinners().length; i++) {
       setTimeout(() => {
-        // move the player to the winning position over 1 second
+        // move the player sprite to the winning position over 1 second
         const shot = new Shot(shotTexture).generateShot();
               shot.visible = false;
               shot.x = player.x;
               shot.y = player.y;
+        const hundo = new Hundo(textSprites.textures).generateHundo();
+              hundo.visible = false;
+              hundo.x = applicationState.getExplosions()[i].x + (hundo.width / 2) - (applicationState.getExplosions()[i].width / 4) + (hundo.width / 4);
+              hundo.y = applicationState.getExplosions()[i].y + (hundo.height / 2) + (applicationState.getExplosions()[i].height / 4);
         anime({
           targets: player,
-          x: 411 + applicationState.getExplosions()[i].x,
+          x: applicationState.getExplosions()[i].x - playerOffset + 80,
           duration: 1000,
           easing: 'easeOutElastic',
           complete: () => {
             shot.x = player.x;
+            scoreState.increaseScore(100);
+            updateScore();
             anime({
               targets: shot,
-              y: applicationState.getWinners()[i].y + drumsContainer.y + 80,
-              duration: 500,
+              y: Math.abs(-((drumsContainer.children[0].height  - 280) - applicationState.getExplosions()[i].y)),
+              duration: 100,
               easing: 'linear',
               begin: () => {
                 playStageContainer.addChild(shot);
@@ -400,6 +636,22 @@ WinningSets(testArr).forEach((set) => {
                 applicationState.getWinners()[i].visible = false;
                 explosionSound.play();
                 drumsContainer.addChild(applicationState.getExplosions()[i]);
+                drumsContainer.addChild(hundo);
+                anime({
+                  targets: hundo,
+                  x: hundo.x - (hundo.width / 4),
+                  y: hundo.y - (hundo.height / 8),
+                  scale: 1.1,
+                  opacity: 0,
+                  duration: 750,
+                  easing: 'linear',
+                  begin: () => {
+                    hundo.visible = true;
+                  },
+                  complete: () => {
+                    hundo.destroy();
+                  }
+                });
               }
             });
           }
@@ -408,6 +660,8 @@ WinningSets(testArr).forEach((set) => {
     }
     setTimeout(() => {
       resetSymbols();
+      applicationState.setSpinning(false);
+      applicationState.setPlayerWander(false);
     }, ((applicationState.getWinners().length + 2) * 1000) + 1000);
   }
 
@@ -422,5 +676,4 @@ WinningSets(testArr).forEach((set) => {
       applicationState.clearExplosions();
     });
   }
-
 })();

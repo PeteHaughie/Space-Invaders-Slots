@@ -2,17 +2,13 @@ import { AnimatedSprite } from 'pixi.js';
 
 class Invader {
   private sprites: any;
-  private symbol: string;
-  private index: number;
 
   constructor(sprites: any) {
     this.sprites = sprites;
-    this.symbol = "";
-    this.index = 0;
   }
 
-  generateInvader(string: string, index: number): AnimatedSprite {
-    const spriteOffsetY = index * 120;
+  generateInvader(string: string, index: number, offset: number = 0): AnimatedSprite {
+    const spriteOffsetY = (index + offset) * 120;
     switch (string) {
       case "s1":
         const invader_s1: AnimatedSprite = AnimatedSprite.fromFrames(this.sprites.data.animations['s1']);
