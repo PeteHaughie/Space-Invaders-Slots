@@ -32,5 +32,8 @@ All other sounds from the original Taito arcade game
 
 An ever expanding list of things to implement or do better:
 
-• Turn the buttons into an actual object that can take a text string and not just be an SVG
-• Fix the theme tune playback audio sprite - for some reason it gets stuck playing the main loop but at the length of the intro segue
+- Turn the buttons into an actual object that can take a text string and not just be an SVG
+- Fix the theme tune playback audio sprite - it works but it's not meant for looping…
+- Make the WinningSets algorithm return a multidimensional array so that the revealWinners function and animation loop can clear between reveals. I did try but for some reason the pixijs objects lost their positional vector when being brought back in. Fixing it would have added additional time which I just did not have.
+- I would have liked to abstract out even more functions to make the entire architecture more modular and thereby portable/reusable but as it was for a one-off project it wasn't worth the time investment.
+- I'm sure there are more…
