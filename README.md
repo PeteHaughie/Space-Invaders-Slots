@@ -6,6 +6,20 @@ The underlying tech is based on Vite, TypeScript, PixiJS, Anime.js, and Howler.j
 
 I wanted to evoke the feeling of the original Space Invaders game as well as the nostalgic feel of the arcade itself. This is why I chose to use the original sprites, artwork, and sounds as much as possible and then attempted to blend them with an 80s inspired audio track. The hope was that it would be exciting but not too domineering for extended periods of play.
 
+## Screenshots
+
+![Screenshot](/screenshots/intro.png)
+*Caption: The intro screen.*
+
+![Screenshot](/screenshots/playfield.png)
+*Caption: The main playing screen.*
+
+![Screenshot](/screenshots/spinning.png)
+*Caption: The drums spinning with the symbols blurred .*
+
+![Screenshot](/screenshots/reveal.png)
+*Caption: The reveal of the winning symbols and incrementing score.*
+
 ## Installation
 
 `npm i`
@@ -34,6 +48,7 @@ All other sounds from the original Taito arcade game
 
 An ever expanding list of things to implement, do better, or just reflections:
 
+- Investigate why the intro screen duplicates the toggle `music button` instead of displaying the `play` button on my laptop.
 - Turn the buttons into an actual object that can take a text string and not just be an SVG
 - Turn that ^ button object into a class for sprite generation
 - Generators for player sprites
