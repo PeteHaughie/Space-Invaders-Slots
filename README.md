@@ -1,6 +1,6 @@
 # Space Invaders Slots
 
-This is a coding competency test for MrQ.
+This was a coding competency test for an online gambling company.
 
 The underlying tech is based on Vite, TypeScript, PixiJS, Anime.js, and Howler.js
 
